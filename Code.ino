@@ -1,0 +1,290 @@
+/***********************************************************************
+						Includes
+***********************************************************************/
+#include "TimerOne.h"
+
+/***********************************************************************
+						Variables
+***********************************************************************/
+// Variables Led Display
+const byte DataPin = 6;
+const byte ClockPin = 5;
+const byte LatchPin = 7;
+const byte Dig0Pin = 8;
+const byte Dig1Pin = 9;
+const byte Dig2Pin = 10;
+const byte Dig3Pin = 11;
+volatile long Value[4] = {1,2,3,4};
+volatile byte Pointer = 0;
+//const int SegData[]={0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F};  // Common Kathode
+const int SegData[]={0x40,0x79,0x24,0x30,0x19,0x12,0x02,0x78,0x00,0x10};  // Common Anode + decimal points
+
+// Variables timer
+volatile unsigned int counter = 0;
+volatile byte CurrentSecond = 0;
+volatile byte CurrentMinute = 0;
+volatile byte StartSecond = 30;
+volatile byte StartMinute = 1;
+const byte MAX_SECOND = 60;
+const byte MAX_MINUTE = 60;
+
+// Variables Button
+const byte ButtonStopPin = 1;
+const byte ButtonStartPin = 0;
+const byte ButtonResetPin = 2;
+const byte ButtonDownPin = 3;
+const byte ButtonUpPin = 4;
+
+// Variables output
+const byte LedBankPin = A5;
+const byte BuzzerPin = A4;
+
+// Flags
+volatile byte isRunning = 0;
+volatile int StopButtonState = LOW;
+volatile int StartButtonState = LOW;
+volatile int ResetButtonState = LOW;
+volatile int UpButtonState = LOW;
+volatile int DownButtonState = LOW;
+
+/***********************************************************************
+						Code
+***********************************************************************/
+
+/*
+ * Initialization routine
+ */
+void setup() {
+	// Initialization serial communication
+//	Serial.begin(9600);
+	
+	// Initialization 4 digits 7 segment display
+	pinMode(DataPin, OUTPUT);
+	pinMode(ClockPin, OUTPUT);
+	pinMode(LatchPin, OUTPUT);  
+	pinMode(Dig0Pin, OUTPUT);  
+	pinMode(Dig1Pin, OUTPUT);  
+	pinMode(Dig2Pin, OUTPUT);
+	pinMode(Dig3Pin, OUTPUT); 
+	Serial.println(F("IO LedBank is initialized"));
+
+	// Initialization I/O
+	pinMode(ButtonStopPin, INPUT);
+	pinMode(ButtonStartPin, INPUT);
+	pinMode(ButtonResetPin, INPUT);
+	pinMode(ButtonUpPin, INPUT);
+	pinMode(ButtonDownPin, INPUT);
+	pinMode(LedBankPin, OUTPUT);
+	pinMode(BuzzerPin, OUTPUT);
+	Serial.println(F("I/O is initialized"));
+
+	// Initialization of interrupt timer
+	Timer1.initialize(5000);  // Intterrupt every 10ms
+	Timer1.attachInterrupt(TimerInterrupt);
+//	Serial.println(F("Timer is initialized"));
+	
+	CurrentMinute = StartMinute;
+	CurrentSecond = StartSecond;
+}
+
+/*
+ * Main routine
+ */
+void loop(){
+	ReadButtons();  // Read input variable and set outputs
+	delay(150);
+	setTime();
+	Value[0] = CurrentMinute / 10;
+	Value[1] = CurrentMinute % 10;
+	Value[2] = CurrentSecond / 10;
+	Value[3] = CurrentSecond % 10;
+}
+
+/***********************************************************************
+						Functions
+***********************************************************************/
+/*
+ * This function is called to read in the IO statements en do the necessary actions
+ */
+void ReadButtons(){
+	// Read the button states
+	StopButtonState = digitalRead(ButtonStopPin);
+	StartButtonState = digitalRead(ButtonStartPin);
+	ResetButtonState = digitalRead(ButtonResetPin);
+	UpButtonState = digitalRead(ButtonUpPin);
+	DownButtonState = digitalRead(ButtonDownPin);
+
+	// For the start button
+	if(StartButtonState == HIGH){
+		if(isRunning == 0){
+			isRunning = 1;
+			CurrentSecond = StartSecond;
+			CurrentMinute = StartMinute;
+			digitalWrite(LedBankPin, HIGH);
+//			Serial.println(F("Start Timer & Leds"));
+		}
+	}
+
+	// For the stop button
+	if(StopButtonState == HIGH && isRunning == 1){
+		digitalWrite(LedBankPin, LOW);
+		isRunning = 0;
+//		Serial.println(F("Stop Timer & Leds"));
+	}
+
+	// For the reset button
+	if(ResetButtonState == HIGH){
+		if(isRunning == 0){
+			digitalWrite(LedBankPin, LOW);
+			CurrentSecond = StartSecond;
+			CurrentMinute = StartMinute;
+//			Serial.println(F("Reset Timer"));
+		}
+	}
+
+	// For the Up button
+	if(UpButtonState == HIGH){
+		if(isRunning == 0){
+			if(StartMinute == MAX_MINUTE){
+				StartSecond = 0;
+				StartMinute = 60;
+			}else{
+				if(StartSecond >= MAX_SECOND-10){
+					StartSecond = 0;
+					StartMinute++;
+					if(StartMinute >= 60){
+						StartMinute = 60;
+					}
+				} else {
+					StartSecond += 10;
+				}
+			}
+//			Serial.print(F("Increase start time: "));
+//			Serial.print(StartMinute, DEC);
+//			Serial.print(F(":"));
+//			Serial.println(StartSecond, DEC);
+			CurrentSecond = StartSecond;
+			CurrentMinute = StartMinute;
+		}
+	}
+
+	// For the Down button
+	if(DownButtonState == HIGH){
+		if(isRunning == 0){
+			if(StartSecond == 0 && StartMinute == 0){
+				StartSecond = 0;
+				StartMinute = 0;
+			} else {
+				if(StartSecond == 0){
+					StartSecond = 50;
+					StartMinute--;
+					if(StartMinute == 255){
+						StartMinute = 0;
+					}
+				}else {
+					StartSecond -= 10;
+				}
+			}
+//			Serial.print(F("Decrease start time: "));
+//			Serial.print(StartMinute, DEC);
+//			Serial.print(F(":"));
+//			Serial.println(StartSecond, DEC);
+			CurrentSecond = StartSecond;
+			CurrentMinute = StartMinute;
+		}
+	}
+}
+
+/*
+ * This function is called by the timer interrupt
+ */
+void setTime(){
+	if(isRunning == 1){
+		if(counter >= 7){
+			CurrentSecond--;
+		if(CurrentMinute == 0 && CurrentSecond == 0){
+			isRunning = 0;
+			digitalWrite(LedBankPin, LOW);
+//			Serial.println(F("Timmer stopped"));
+			tone(BuzzerPin, 3000, 3000);
+      }else if(CurrentSecond == 0){
+				CurrentMinute--;
+				CurrentSecond = 59;
+			}
+			counter = 1;
+//			Serial.print(CurrentMinute, DEC);
+//			Serial.print(F(":"));
+//			Serial.println(CurrentSecond, DEC);
+		} else {
+			counter++;
+		}
+	}
+}
+
+/*
+ * 
+ */
+void WriteDigit(volatile byte number){
+	for(volatile byte i = 0; i < 8; i++){
+		if((number & 0x80) == 0x80){ // Shift bit by bit data in shift register
+			digitalWrite(DataPin, HIGH);
+		} else {
+			digitalWrite(DataPin, LOW);
+		}
+		number = number<<1;
+		// Give Clock pulse
+		digitalWrite(ClockPin, LOW);
+		digitalWrite(ClockPin, HIGH);
+	}
+	// Latch the data
+	digitalWrite(LatchPin, LOW);
+	digitalWrite(LatchPin, HIGH);
+}
+
+/*
+ * 
+ */
+void WriteLedBankDisplay(){
+	switch(Pointer){
+		case 0:
+			digitalWrite(Dig3Pin, LOW);
+			WriteDigit(SegData[Value[0]]);
+			digitalWrite(Dig0Pin, HIGH);
+			break;
+    
+		case 1:
+			digitalWrite(Dig0Pin, LOW);
+			WriteDigit(SegData[Value[1]]);
+			digitalWrite(Dig1Pin, HIGH);
+			break;
+    
+		case 2:
+			digitalWrite(Dig1Pin, LOW);
+			WriteDigit(SegData[Value[2]]);
+			digitalWrite(Dig2Pin, HIGH);
+			break;
+    
+		case 3:
+			digitalWrite(Dig2Pin, LOW);
+			WriteDigit(SegData[Value[3]]);
+			digitalWrite(Dig3Pin, HIGH);
+			break;
+
+		default:
+//			Serial.println(F("Couldn't write segment"));
+			break;
+	}
+}
+
+/*
+ * 
+ */
+void TimerInterrupt(){
+  Pointer++;
+  if(Pointer >=4){
+	  Pointer = 0;
+  }
+  WriteLedBankDisplay();
+  TCNT0=0xCC;
+}
+
