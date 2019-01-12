@@ -7,13 +7,13 @@
 						Variables
 ***********************************************************************/
 // Variables Led Display
-#define DataPin = 6;
-#define ClockPin = 5;
-#define LatchPin = 7;
-#define Dig0Pin = 8;
-#define Dig1Pin = 9;
-#define Dig2Pin = 10;
-#define Dig3Pin = 11;
+const byte DataPin = 6;
+const byte ClockPin = 5;
+const byte LatchPin = 7;
+const byte Dig0Pin = 8;
+const byte Dig1Pin = 9;
+const byte Dig2Pin = 10;
+const byte Dig3Pin = 11;
 volatile long Value[4] = {1,2,3,4};
 volatile byte Pointer = 0;
 //const int SegData[]={0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F};  // Common Kathode
@@ -29,15 +29,15 @@ const byte MAX_SECOND = 60;
 const byte MAX_MINUTE = 60;
 
 // Variables Button
-#define ButtonStopPin = 1;
-#define ButtonStartPin = 0;
-#define ButtonResetPin = 2;
-#define ButtonDownPin = 3;
-#define ButtonUpPin = 4;
+const byte ButtonStopPin = 1;
+const byte ButtonStartPin = 0;
+const byte ButtonResetPin = 2;
+const byte ButtonDownPin = 3;
+const byte ButtonUpPin = 4;
 
 // Variables output
-#define LedBankPin = A5;
-#define BuzzerPin = A4;
+const byte LedBankPin = A5;
+const byte BuzzerPin = A4;
 
 // Flags
 volatile byte isRunning = 0;
